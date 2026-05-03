@@ -2,17 +2,20 @@ import * as cheerio from "cheerio";
 
 export type SportKey = "nba" | "mlb" | "nhl";
 
+export type GameStatus = "pregame" | "live" | "final";
+
 export type ScrapedGame = {
   sport: SportKey;
   externalId: string;
   matchupUrl: string;
+  status: GameStatus;
   awayTeam: string;
   homeTeam: string;
-  awaySpread: number | null;
-  homeSpread: number | null;
+  awayLine: number | null;
+  homeLine: number | null;
   awayPublicPct: number | null;
   homePublicPct: number | null;
-  startsAt: string | null;
+  startsAtText: string | null;
 };
 
 const COVERS_BASE = "https://www.covers.com";
@@ -26,23 +29,40 @@ const SPORT_PATHS: Record<SportKey, string> = {
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-function parsePct(text: string | undefined): number | null {
-  if (!text) return null;
+function parsePct(text: string): number | null {
   const m = text.match(/(\d{1,3})\s*%/);
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 }
 
-function parseSpread(text: string | undefined): number | null {
-  if (!text) return null;
-  // Examples: "+8.5", "-3", "PK", "+1½"
-  const cleaned = text.replace(/½/g, ".5").replace(/[−–—]/g, "-");
-  if (/PK/i.test(cleaned)) return 0;
+function parseLine(text: string): number | null {
+  // Strip the percentage so we don't accidentally parse it as the line.
+  const withoutPct = text.replace(/\d{1,3}\s*%/g, " ");
+  const cleaned = withoutPct.replace(/½/g, ".5").replace(/[−–—]/g, "-");
+  if (/\bPK\b/i.test(cleaned)) return 0;
   const m = cleaned.match(/[-+]?\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) ? n : null;
+}
+
+function classifyStatus(classAttr: string): GameStatus {
+  if (/\bpregamebox\b/.test(classAttr)) return "pregame";
+  if (/\bingamebox\b/.test(classAttr)) return "live";
+  return "final";
+}
+
+function splitHeaderTeams(header: string): { away: string; home: string } {
+  // Format: "Toronto @ Cleveland Conf. QF" — strip trailing round/series tags.
+  const cleaned = header
+    .replace(/\s+(?:Conf\.|Conference|Series|Round|Game)(?:\s.*)?$/i, "")
+    .trim();
+  const parts = cleaned.split(/\s*@\s*/);
+  if (parts.length >= 2) {
+    return { away: parts[0].trim(), home: parts[1].trim() };
+  }
+  return { away: "", home: "" };
 }
 
 export async function scrapeCoversMatchups(
@@ -73,80 +93,86 @@ export function parseCoversMatchups(
   const $ = cheerio.load(html);
   const games: ScrapedGame[] = [];
 
-  // Each game card has a data-game-id and contains team logos (alt="..."),
-  // a team-consensus span per side and a spread next to it.
-  $("[data-game-id]").each((_, el) => {
-    const $card = $(el);
-    const externalId = $card.attr("data-game-id")?.trim();
-    if (!externalId) return;
+  $(".gamebox").each((_, el) => {
+    const $box = $(el);
+    const classAttr = $box.attr("class") ?? "";
+    const status = classifyStatus(classAttr);
 
-    const matchupHref = $card.find(`a[href*="/matchup/${externalId}"]`).first().attr("href") ?? "";
-    const matchupUrl = matchupHref
-      ? matchupHref.startsWith("http")
-        ? matchupHref
-        : `${COVERS_BASE}${matchupHref}`
-      : "";
+    const matchupHref =
+      $box.find('a[href*="/matchup/"]').first().attr("href") ?? "";
+    const idMatch = matchupHref.match(/\/matchup\/(\d+)/);
+    if (!idMatch) return;
+    const externalId = idMatch[1];
+    const matchupUrl = matchupHref.startsWith("http")
+      ? matchupHref
+      : `${COVERS_BASE}${matchupHref}`;
 
-    // Team names from logo alt text — first is away, second is home on Covers.
-    const teamAlts = $card
-      .find("img[alt]")
-      .map((_i, img) => $(img).attr("alt")?.trim() ?? "")
-      .get()
-      .filter((s) => s.length > 0 && !/logo|sportsbook|book|covers/i.test(s));
+    const header = $box
+      .find(".gamebox-header")
+      .first()
+      .text()
+      .trim()
+      .replace(/\s+/g, " ");
+    const { away: awayTeam, home: homeTeam } = splitHeaderTeams(header);
 
-    const [awayTeam = "", homeTeam = ""] = teamAlts;
-
-    // team-consensus blocks come in pairs (away first, then home).
-    const consensus = $card
-      .find("span.team-consensus")
-      .map((_i, span) => {
-        const $span = $(span);
-        const pctText = $span.find("strong").first().text();
-        const fullText = $span.text();
-        const pct = parsePct(pctText);
-        // Spread is whatever's left in the span text after the percentage.
-        const spreadText = fullText.replace(/\d{1,3}\s*%/, "").trim();
-        return { pct, spread: parseSpread(spreadText) };
-      })
-      .get();
-
-    const [away, home] = [consensus[0], consensus[1]];
-
-    // Game start time — Covers tags it with data-game-date or shows in card.
-    const startsAt =
-      $card.attr("data-game-date") ??
-      $card.find("[data-game-date]").first().attr("data-game-date") ??
+    const startsAtText =
+      $box.find(".gamebox-time").first().text().trim().replace(/\s+/g, " ") ||
       null;
+
+    const consensusTexts = $box
+      .find(".team-consensus")
+      .map((_i, span) => $(span).text().trim().replace(/\s+/g, " "))
+      .get();
+    const [awayConsensus, homeConsensus] = consensusTexts;
 
     games.push({
       sport,
       externalId,
       matchupUrl,
+      status,
       awayTeam,
       homeTeam,
-      awaySpread: away?.spread ?? null,
-      homeSpread: home?.spread ?? null,
-      awayPublicPct: away?.pct ?? null,
-      homePublicPct: home?.pct ?? null,
-      startsAt,
+      awayLine: awayConsensus ? parseLine(awayConsensus) : null,
+      homeLine: homeConsensus ? parseLine(homeConsensus) : null,
+      awayPublicPct: awayConsensus ? parsePct(awayConsensus) : null,
+      homePublicPct: homeConsensus ? parsePct(homeConsensus) : null,
+      startsAtText,
     });
   });
 
   return games;
 }
 
+export type FadeFlag = ScrapedGame & {
+  fadeSide: "away" | "home";
+  publicPct: number;
+  fadeLine: number | null;
+  fadeTeam: string;
+};
+
 export function flagFades(
   games: ScrapedGame[],
   thresholdPct: number
-): Array<ScrapedGame & { fadeSide: "away" | "home"; publicPct: number }> {
-  const flagged: Array<
-    ScrapedGame & { fadeSide: "away" | "home"; publicPct: number }
-  > = [];
+): FadeFlag[] {
+  const flagged: FadeFlag[] = [];
   for (const g of games) {
+    if (g.status !== "pregame") continue;
     if (g.awayPublicPct != null && g.awayPublicPct >= thresholdPct) {
-      flagged.push({ ...g, fadeSide: "home", publicPct: g.awayPublicPct });
+      flagged.push({
+        ...g,
+        fadeSide: "home",
+        publicPct: g.awayPublicPct,
+        fadeLine: g.homeLine,
+        fadeTeam: g.homeTeam,
+      });
     } else if (g.homePublicPct != null && g.homePublicPct >= thresholdPct) {
-      flagged.push({ ...g, fadeSide: "away", publicPct: g.homePublicPct });
+      flagged.push({
+        ...g,
+        fadeSide: "away",
+        publicPct: g.homePublicPct,
+        fadeLine: g.awayLine,
+        fadeTeam: g.awayTeam,
+      });
     }
   }
   return flagged;
