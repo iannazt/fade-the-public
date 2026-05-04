@@ -56,7 +56,10 @@ function classifyStatus(classAttr: string): GameStatus {
 function splitHeaderTeams(header: string): { away: string; home: string } {
   // Format: "Toronto @ Cleveland Conf. QF" — strip trailing round/series tags.
   const cleaned = header
-    .replace(/\s+(?:Conf\.|Conference|Series|Round|Game)(?:\s.*)?$/i, "")
+    .replace(
+      /\s+(?:Conf\.|Conference|Series|Round|Game|Interleague|World Series|Wild Card|Divisional|Playoffs?|Finals?)(?:\s.*)?$/i,
+      ""
+    )
     .trim();
   const parts = cleaned.split(/\s*@\s*/);
   if (parts.length >= 2) {
