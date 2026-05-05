@@ -15,12 +15,22 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  function describe(name: string): { present: boolean; length: number; preview: string } {
+  function describe(name: string): {
+    present: boolean;
+    length: number;
+    preview: string;
+    head: string;
+    tail: string;
+  } {
     const v = process.env[name] ?? "";
     return {
       present: v.length > 0,
       length: v.length,
       preview: v.length === 0 ? "" : `${v.slice(0, 6)}…${v.slice(-4)}`,
+      // Reveal more so we can spot stray prefixes/suffixes. URL/secret previews
+      // are still safe behind CRON_SECRET-only access.
+      head: v.slice(0, 30),
+      tail: v.slice(-20),
     };
   }
 
