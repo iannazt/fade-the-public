@@ -17,8 +17,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const supabase = createServiceClient();
   try {
+    const supabase = createServiceClient();
     const summary = await gradeRecentGames(supabase, 3);
     return NextResponse.json({ ranAt: new Date().toISOString(), ...summary });
   } catch (err) {
