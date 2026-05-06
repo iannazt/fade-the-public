@@ -5,14 +5,9 @@ import {
   profitUnits,
   type FadeOutcome,
 } from "@/lib/grading";
+import { SPORT_LABEL } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
-
-const SPORT_LABEL: Record<string, string> = {
-  nba: "NBA",
-  mlb: "MLB",
-  nhl: "NHL",
-};
 
 type FadeRow = {
   id: string;
@@ -58,6 +53,10 @@ function formatNumber(n: number, digits = 2): string {
   return (Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits)).toFixed(
     digits
   );
+}
+
+function sportLabel(sport: string): string {
+  return (SPORT_LABEL as Record<string, string>)[sport] ?? sport.toUpperCase();
 }
 
 function StatCard({
@@ -123,6 +122,21 @@ export default async function HistoryPage({
     records.map((r) => ({ outcome: r.outcome, fadeLine: r.fadeLine }))
   );
 
+  const recordSummary = (() => {
+    const decided = stats.wins + stats.losses;
+    if (decided === 0) {
+      return stats.unresolved > 0
+        ? `Fade Record: 0-0 (no graded results yet)`
+        : `Fade Record: 0-0`;
+    }
+    const pct = (stats.wins / decided) * 100;
+    const pushSuffix = stats.pushes > 0 ? `, ${stats.pushes} push` : "";
+    return `Fade Record: ${stats.wins}-${stats.losses} (${formatNumber(
+      pct,
+      0
+    )}%)${pushSuffix}`;
+  })();
+
   const thresholdOptions = [60, 65, 70, 75, 80];
 
   return (
@@ -132,6 +146,10 @@ export default async function HistoryPage({
         <p className="mt-2 text-zinc-400">
           Every fade flagged at this threshold and how each one settled.
         </p>
+      </div>
+
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-lg font-mono tabular-nums">
+        {recordSummary}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
@@ -252,17 +270,22 @@ export default async function HistoryPage({
                     : outcome === "push"
                     ? "text-zinc-400"
                     : "text-zinc-500";
+                const rowTint =
+                  outcome === "win"
+                    ? "bg-emerald-500/10 hover:bg-emerald-500/15"
+                    : outcome === "loss"
+                    ? "bg-rose-500/10 hover:bg-rose-500/15"
+                    : "bg-zinc-950/40";
                 return (
                   <tr
                     key={flag.id}
-                    className="border-t border-zinc-800 bg-zinc-950/40"
+                    className={`border-t border-zinc-800 ${rowTint}`}
                   >
                     <td className="px-3 py-2 whitespace-nowrap text-zinc-400">
                       {formatDate(flag.flagged_at)}
                     </td>
                     <td className="px-3 py-2 text-zinc-300">
-                      {SPORT_LABEL[flag.games?.sport ?? ""] ??
-                        (flag.games?.sport ?? "").toUpperCase()}
+                      {sportLabel(flag.games?.sport ?? "")}
                     </td>
                     <td className="px-3 py-2">{matchup}</td>
                     <td className="px-3 py-2 font-medium text-emerald-300">

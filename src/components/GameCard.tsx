@@ -1,3 +1,5 @@
+import { SPORT_LABEL } from "@/lib/sports";
+
 type Props = {
   sport: string;
   awayTeam: string;
@@ -8,6 +10,8 @@ type Props = {
   homePublicPct: number | null;
   startsAtText: string | null;
   threshold: number;
+  /** Which side to label as the fade pick. Null = no signal (future day). */
+  fadePick: "away" | "home" | null;
 };
 
 function formatLine(n: number | null): string {
@@ -16,11 +20,9 @@ function formatLine(n: number | null): string {
   return n > 0 ? `+${n}` : String(n);
 }
 
-const SPORT_LABEL: Record<string, string> = {
-  nba: "NBA",
-  mlb: "MLB",
-  nhl: "NHL",
-};
+function sportLabel(sport: string): string {
+  return (SPORT_LABEL as Record<string, string>)[sport] ?? sport.toUpperCase();
+}
 
 export default function GameCard({
   sport,
@@ -32,10 +34,10 @@ export default function GameCard({
   homePublicPct,
   startsAtText,
   threshold,
+  fadePick,
 }: Props) {
   const awayHigh = awayPublicPct != null && awayPublicPct >= threshold;
   const homeHigh = homePublicPct != null && homePublicPct >= threshold;
-  const fadeSide = awayHigh ? "home" : homeHigh ? "away" : null;
 
   const sideRow = (
     label: string,
@@ -86,7 +88,7 @@ export default function GameCard({
     <article className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
       <div className="mb-3 flex items-center justify-between text-xs text-zinc-500">
         <span className="rounded bg-zinc-800 px-2 py-0.5 font-semibold uppercase tracking-wider text-zinc-300">
-          {SPORT_LABEL[sport] ?? sport.toUpperCase()}
+          {sportLabel(sport)}
         </span>
         {startsAtText && <span>{startsAtText}</span>}
       </div>
@@ -97,7 +99,7 @@ export default function GameCard({
           awayLine,
           awayPublicPct,
           awayHigh,
-          fadeSide === "away"
+          fadePick === "away"
         )}
         {sideRow(
           "Home",
@@ -105,7 +107,7 @@ export default function GameCard({
           homeLine,
           homePublicPct,
           homeHigh,
-          fadeSide === "home"
+          fadePick === "home"
         )}
       </div>
     </article>

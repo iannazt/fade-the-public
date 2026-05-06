@@ -42,6 +42,9 @@ export default function RootLayout({
               <Link href="/history" className="hover:text-white">
                 History
               </Link>
+              <Link href="/how-it-works" className="hover:text-white">
+                How It Works
+              </Link>
             </div>
           </nav>
         </header>
