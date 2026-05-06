@@ -28,10 +28,18 @@ type Competitor = {
   };
 };
 
+type MoneylineSide = {
+  close?: { odds?: number | string };
+  open?: { odds?: number | string };
+};
+
 type OddsBlock = {
   spread?: number | string;
+  // ESPN sometimes exposes per-side moneylines at the top of the team odds,
+  // sometimes only inside the `moneyline` block. Read both.
   homeTeamOdds?: { moneyLine?: number | string };
   awayTeamOdds?: { moneyLine?: number | string };
+  moneyline?: { home?: MoneylineSide; away?: MoneylineSide };
 };
 
 type Event = {
@@ -144,6 +152,14 @@ export async function fetchEspnScheduled(
       // Keep raw ISO if formatter chokes.
     }
     const odds = comp.odds?.[0];
+    const homeML =
+      coerceNum(odds?.homeTeamOdds?.moneyLine) ??
+      coerceNum(odds?.moneyline?.home?.close?.odds) ??
+      coerceNum(odds?.moneyline?.home?.open?.odds);
+    const awayML =
+      coerceNum(odds?.awayTeamOdds?.moneyLine) ??
+      coerceNum(odds?.moneyline?.away?.close?.odds) ??
+      coerceNum(odds?.moneyline?.away?.open?.odds);
     out.push({
       externalId: event.id,
       startsAtIso: event.date,
@@ -151,8 +167,8 @@ export async function fetchEspnScheduled(
       awayTeam,
       homeTeam,
       spread: coerceNum(odds?.spread),
-      homeMoneyLine: coerceNum(odds?.homeTeamOdds?.moneyLine),
-      awayMoneyLine: coerceNum(odds?.awayTeamOdds?.moneyLine),
+      homeMoneyLine: homeML,
+      awayMoneyLine: awayML,
     });
   }
   return out;
