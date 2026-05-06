@@ -55,7 +55,8 @@ function pickFadeSide(
 
   if (BET_TYPE[g.sport] === "moneyline") {
     if (publicLine == null) return null;
-    if (Math.abs(publicLine) > MONEYLINE_FAVORITE_FLOOR) return null;
+    if (publicLine >= 0) return null; // public on dog -> not a fade
+    if (publicLine < -MONEYLINE_FAVORITE_FLOOR) return null; // too heavy
   }
   return publicSide === "away" ? "home" : "away";
 }

@@ -6,9 +6,13 @@ import {
 } from "@/lib/scrapers/covers";
 import { upsertGames, recordFadeFlags } from "@/lib/scrapers/persist";
 import { todayInEastern } from "@/lib/fade-rules";
-import { SPORTS } from "@/lib/sports";
+import { SPORTS, type SportKey } from "@/lib/sports";
+import { fetchEspnScheduled } from "@/lib/results/espn";
 
-const THRESHOLDS = [60, 65, 70, 75, 80];
+// 65% is the floor. Higher thresholds let the History page filter to
+// stricter subsets. We do NOT record at 60% — below 65 the market isn't
+// imbalanced enough for the line-shading dynamic to matter.
+const THRESHOLDS = [65, 70, 75, 80];
 
 function authorized(req: Request): boolean {
   const expected = process.env.CRON_SECRET;
@@ -18,6 +22,17 @@ function authorized(req: Request): boolean {
   const url = new URL(req.url);
   if (url.searchParams.get("secret") === expected) return true;
   return false;
+}
+
+function addDaysIso(yyyymmdd: string, days: number): string {
+  const [y, m, d] = yyyymmdd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+function toYyyymmdd(yyyymmdd: string): string {
+  return yyyymmdd.replace(/-/g, "");
 }
 
 export async function GET(req: Request) {
@@ -38,11 +53,13 @@ export async function GET(req: Request) {
   const today = todayInEastern();
   const perSport: Record<
     string,
-    { games: number; flags: number; error?: string }
+    { games: number; flags: number; espn: number; error?: string }
   > = {};
   const allGames: ScrapedGame[] = [];
 
+  // 1) Today: scrape Covers (full data: matchup, line, public%, fade flagging).
   for (const sport of SPORTS) {
+    perSport[sport] = { games: 0, flags: 0, espn: 0 };
     try {
       const games = await scrapeCoversMatchups(sport);
       allGames.push(...games);
@@ -53,13 +70,49 @@ export async function GET(req: Request) {
         flagCount += await recordFadeFlags(supabase, games, t, today, idMap);
       }
 
-      perSport[sport] = { games: games.length, flags: flagCount };
+      perSport[sport].games = games.length;
+      perSport[sport].flags = flagCount;
     } catch (err) {
-      perSport[sport] = {
-        games: 0,
-        flags: 0,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      perSport[sport].error =
+        err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  // 2) Tomorrow + day-after: pull schedules from ESPN. No public% or line
+  //    is available for future days — these rows are informational only.
+  const futureDates = [addDaysIso(today, 1), addDaysIso(today, 2)];
+  for (const sport of SPORTS) {
+    for (const isoDate of futureDates) {
+      try {
+        const scheduled = await fetchEspnScheduled(
+          sport as SportKey,
+          toYyyymmdd(isoDate)
+        );
+        if (scheduled.length === 0) continue;
+        const rows: ScrapedGame[] = scheduled.map((s) => ({
+          sport: sport as SportKey,
+          externalId: `espn:${s.externalId}`,
+          matchupUrl: "",
+          status: "pregame",
+          awayTeam: s.awayTeam,
+          homeTeam: s.homeTeam,
+          awayLine: null,
+          homeLine: null,
+          awayPublicPct: null,
+          homePublicPct: null,
+          startsAtText: s.startsAtText,
+          gameDate: isoDate,
+        }));
+        await upsertGames(supabase, rows);
+        perSport[sport].espn += rows.length;
+      } catch (err) {
+        // Don't fail the whole cron for a missing ESPN date / sport —
+        // future days are best-effort.
+        if (!perSport[sport].error) {
+          perSport[sport].error =
+            err instanceof Error ? err.message : String(err);
+        }
+      }
     }
   }
 

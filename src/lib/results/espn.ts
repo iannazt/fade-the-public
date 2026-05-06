@@ -19,12 +19,20 @@ const ESPN_PATH: Record<SportKey, string> = {
 type Competitor = {
   homeAway: "home" | "away";
   score: string;
-  team: { displayName: string; shortDisplayName?: string; abbreviation?: string };
+  team: {
+    displayName: string;
+    shortDisplayName?: string;
+    location?: string;
+    name?: string;
+    abbreviation?: string;
+  };
 };
 
 type Event = {
+  id: string;
+  date: string;
   competitions: Array<{
-    status: { type: { completed: boolean } };
+    status: { type: { completed: boolean; state?: string } };
     competitors: Competitor[];
   }>;
 };
@@ -63,6 +71,69 @@ export async function fetchEspnFinals(
     });
   }
   return finals;
+}
+
+export type EspnScheduled = {
+  externalId: string;
+  startsAtIso: string;
+  startsAtText: string;
+  awayTeam: string;
+  homeTeam: string;
+};
+
+const TIME_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZoneName: "short",
+});
+
+/**
+ * Fetch ESPN's scoreboard for `yyyymmdd` and return only games still
+ * scheduled (state="pre"). Used for tomorrow / day-after on the
+ * Upcoming page since Covers only serves today's matchups.
+ */
+export async function fetchEspnScheduled(
+  sport: SportKey,
+  yyyymmdd: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<EspnScheduled[]> {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_PATH[sport]}/scoreboard?dates=${yyyymmdd}`;
+  const res = await fetchImpl(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`ESPN ${sport} ${yyyymmdd}: HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as { events?: Event[] };
+  const out: EspnScheduled[] = [];
+  for (const event of data.events ?? []) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    if (comp.status?.type?.state !== "pre") continue;
+    const away = comp.competitors.find((c) => c.homeAway === "away");
+    const home = comp.competitors.find((c) => c.homeAway === "home");
+    if (!away || !home) continue;
+    const awayTeam = away.team.location ?? away.team.displayName;
+    const homeTeam = home.team.location ?? home.team.displayName;
+    if (!awayTeam || !homeTeam) continue;
+    let startsAtText = event.date;
+    try {
+      startsAtText = TIME_FMT.format(new Date(event.date));
+    } catch {
+      // Keep raw ISO if formatter chokes.
+    }
+    out.push({
+      externalId: event.id,
+      startsAtIso: event.date,
+      startsAtText,
+      awayTeam,
+      homeTeam,
+    });
+  }
+  return out;
 }
 
 /**

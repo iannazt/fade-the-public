@@ -48,8 +48,17 @@ export const BET_TYPE: Record<SportKey, BetType> = {
   nhl: "moneyline",
 };
 
-/** Maximum |line| at which we'll flag a moneyline fade. */
-export const MONEYLINE_FAVORITE_FLOOR = 200;
+/**
+ * The public side on a moneyline fade must be the favorite (negative odds)
+ * and priced no shorter than -MONEYLINE_FAVORITE_FLOOR. So a -150 fav
+ * qualifies, -175 qualifies, -176 doesn't, and a +120 dog never qualifies.
+ *
+ * Reasoning: the line-shading dynamic only exists when the public is
+ * pushing a favorite. And once the favorite is too heavy (longer than
+ * -175), the implied probability is high enough that the public is
+ * probably right and there's no edge in the dog.
+ */
+export const MONEYLINE_FAVORITE_FLOOR = 175;
 
 export function isSportKey(value: string): value is SportKey {
   return (SPORTS as readonly string[]).includes(value);

@@ -30,77 +30,91 @@ export default function HowItWorksPage() {
         </p>
       </div>
 
-      <Section title="What &ldquo;fading the public&rdquo; means">
+      <Section title="The edge">
         <p>
-          Sportsbooks publish how the betting public is splitting their action
-          on each game. When the crowd piles on one side &mdash; say 70% of all
-          bets are on Team A &mdash; the contrarian play is to bet the other
-          side, &ldquo;fading the public.&rdquo; The premise: bookmakers price
-          lines partly to balance their action, so heavy public money on one
-          side often signals a less-sharp market.
-        </p>
-        <p>
-          This site flags those lopsided games for you and tracks the result of
-          every flag over time, so you can see whether the contrarian
-          philosophy actually held up &mdash; not just whether it sounds good.
+          Sportsbooks don&rsquo;t set lines purely on team strength &mdash; they
+          shade them to balance their action, which means lines drift toward
+          whichever side the public is hammering. Once the crowd is lopsided
+          enough, the book&rsquo;s number is no longer the true price; it&rsquo;s
+          a price the book wants you to lay. Betting the other side recaptures
+          the points the public has already paid for. This site finds those
+          spots in real time and tracks every one so you can see whether the
+          edge actually shows up in the data.
         </p>
       </Section>
 
-      <Section title="The 65% threshold &mdash; and why it&rsquo;s game-day only">
+      <Section title="Why 65%, and why only on game day">
         <p>
-          We mark a game as a fade candidate when at least 65% of public
-          bettors are on one side of the spread (or moneyline). 65% is the
-          tipping point where the market is meaningfully unbalanced without
-          being a bad-line trap.
+          Below 65%, the action is balanced enough that the book has no reason
+          to move the line &mdash; both sides are getting bet, the price is
+          honest, and there&rsquo;s no shading to exploit. Once one side crosses
+          65%, the book has started shifting the number to discourage more
+          money on that side, which is the moment value opens up on the
+          opposite side.
         </p>
         <p>
-          We only apply the threshold on <em>game day</em>. Public % can shift
-          a lot in the 48 hours leading up to a game, especially as injury
-          news drops and casual bettors get involved. Earlier signals are too
-          noisy to act on, so games posted for tomorrow or the day after
-          appear in Upcoming as informational only &mdash; matchup and current
-          public % shown, but no fade signal yet.
+          We only apply the rule on game day. Public % posted two or three days
+          out is mostly noise &mdash; injury news hasn&rsquo;t dropped, casual
+          bettors haven&rsquo;t weighed in yet, and sharp money tends to come in
+          late. Acting on early numbers means acting before the market has
+          actually formed. So games posted for tomorrow or the day after appear
+          in Upcoming as informational only &mdash; matchup and time, no fade
+          signal until the day of.
         </p>
       </Section>
 
-      <Section title="Why spread for some sports, moneyline for others">
+      <Section title="Spread vs. moneyline by sport">
         <p>
-          Spread bets are the natural action market in football and
-          basketball, so we track public% on the spread for{" "}
-          <span className="font-mono">NFL</span>,{" "}
+          Spread bets are the dominant market in football and basketball, so
+          for <span className="font-mono">NFL</span>,{" "}
           <span className="font-mono">NBA</span>,{" "}
           <span className="font-mono">NCAAF</span>, and{" "}
-          <span className="font-mono">NCAAB</span>.
+          <span className="font-mono">NCAAB</span> we track public % on the
+          spread. That&rsquo;s where the public concentrates action and
+          where the line-shading dynamic operates.
         </p>
         <p>
-          For <span className="font-mono">MLB</span> and{" "}
-          <span className="font-mono">NHL</span>, run lines and puck lines
-          aren&rsquo;t the dominant market &mdash; the moneyline is. So we
-          track public% on the moneyline instead. The fade math just changes
-          slightly (American odds for profit instead of standard -110 juice).
+          Baseball and hockey are different. Run lines and puck lines are
+          niche markets &mdash; the public bets the moneyline. So for{" "}
+          <span className="font-mono">MLB</span> and{" "}
+          <span className="font-mono">NHL</span> we track public % on the
+          moneyline instead. The fade math just uses American odds for profit
+          calculation rather than standard -110 juice.
         </p>
       </Section>
 
-      <Section title="The -200 rule for moneyline fades">
+      <Section title="The two rules for moneyline fades">
         <p>
-          On the moneyline, fading a heavy favorite is a trap. If the public
-          is 70% on a -500 favorite, the market still implies that team wins
-          ~83% of the time &mdash; the public is right, just expensive.
-          Fading there means betting an underdog at +400 odds that should
-          probably be +600.
+          Moneyline fades only work under two specific conditions. First, the
+          public has to be backing the <em>favorite</em>, not the underdog.
+          When the crowd piles on a -150 favorite, the book shifts the line
+          toward -160 or -170 to discourage it &mdash; that shift creates value
+          on the dog. When the crowd piles on a +150 underdog, the same
+          shading dynamic doesn&rsquo;t exist; books rarely shorten an
+          underdog price in response to public money. Public on a dog is just
+          public on a dog &mdash; nothing to fade.
         </p>
         <p>
-          So for moneyline sports, we only flag a fade when the favorite is at{" "}
-          <span className="font-mono">-200</span> or shorter (closer to even).
-          A -180 favorite getting 70% of bets is interesting; a -500 favorite
-          is just expected.
+          Second, that favorite has to be priced at{" "}
+          <span className="font-mono">-175</span> or shorter (i.e., closer to
+          even). Once a favorite is longer than -175 &mdash; -200, -300,
+          whatever &mdash; its implied win probability is high enough that the
+          public is probably right and the dog is genuinely a bad price. Fading
+          a -300 favorite means betting an underdog that should win ~25% of
+          the time at +250 odds, which doesn&rsquo;t pay enough. The
+          line-shading effect can&rsquo;t overcome that math.
+        </p>
+        <p>
+          Combine those two rules and a moneyline fade only fires when the
+          public is on a favorite priced between roughly -110 and -175. That
+          window is where the value actually lives.
         </p>
       </Section>
 
-      <Section title="Example walkthrough">
+      <Section title="Example">
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 font-mono text-sm">
           <div className="mb-2 text-xs uppercase tracking-wider text-zinc-500">
-            NBA · Sunday, May 3
+            NBA · Sunday, May 3 · Spread
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex justify-between">
@@ -116,15 +130,21 @@ export default function HowItWorksPage() {
           </div>
         </div>
         <p>
-          Public is 68% on Toronto. We fade by recommending{" "}
+          NBA is a spread sport, so we&rsquo;re tracking the spread. 68% of the
+          public is on Toronto +8.5 &mdash; well past the 65% threshold. The
+          book has been shading the line in Toronto&rsquo;s direction to balance
+          the action, which means Cleveland -8.5 is now a stale (better) price
+          on the unpopular side. We fade by laying{" "}
           <span className="font-medium text-emerald-300">Cleveland -8.5</span>{" "}
-          at standard -110 juice. If Cleveland wins by more than 8.5, the fade
-          wins. We risk 1 unit to win 0.91. If Cleveland wins by exactly 8.5,
-          push. Anything else, the fade loses 1 unit.
+          at standard -110 juice. Cleveland wins by 9 or more, the fade wins
+          (+0.91 units). Cleveland wins by exactly 8, push. Anything else, the
+          fade loses 1 unit.
         </p>
         <p>
-          The History page tracks every flagged fade like this one and
-          computes hit rate, units won, and ROI as data accumulates.
+          This exact game is in the History page along with every other
+          flagged fade. As more flags settle, the hit rate, unit total, and
+          ROI numbers tell you whether the method is producing actual edge in
+          the data &mdash; not just on paper.
         </p>
       </Section>
 

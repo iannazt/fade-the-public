@@ -42,10 +42,15 @@ export function evaluateFade(
 
   if (!publicSide) return null;
 
-  // Moneyline: only flag when the favorite isn't too heavy.
+  // Moneyline rules:
+  //  1. Public side must be the favorite (negative odds). Public on a dog
+  //     is not a fade-the-public setup — there's no line-shading to exploit.
+  //  2. The favorite must be no shorter than -MONEYLINE_FAVORITE_FLOOR.
+  //     Once the public side is e.g. -300, the public is probably right.
   if (betType === "moneyline") {
     if (publicSideLine == null) return null;
-    if (Math.abs(publicSideLine) > MONEYLINE_FAVORITE_FLOOR) return null;
+    if (publicSideLine >= 0) return null; // dog or pickem -> not a fade
+    if (publicSideLine < -MONEYLINE_FAVORITE_FLOOR) return null; // too heavy
   }
 
   // We fade the OPPOSITE side from where the public is.

@@ -32,7 +32,7 @@ type FadeRow = {
 function clampThreshold(raw: string | string[] | undefined): number {
   const n = Number(Array.isArray(raw) ? raw[0] : raw);
   if (!Number.isFinite(n)) return 65;
-  return [60, 65, 70, 75, 80].includes(n) ? n : 65;
+  return [65, 70, 75, 80].includes(n) ? n : 65;
 }
 
 function formatLine(n: number | null): string {
@@ -137,7 +137,7 @@ export default async function HistoryPage({
     )}%)${pushSuffix}`;
   })();
 
-  const thresholdOptions = [60, 65, 70, 75, 80];
+  const thresholdOptions = [65, 70, 75, 80];
 
   return (
     <div className="flex flex-col gap-6">
