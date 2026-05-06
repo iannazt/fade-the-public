@@ -9,7 +9,7 @@ create extension if not exists "pgcrypto";
 -- ──────────────────────────────────────────────────────────────────────────────
 create table if not exists public.games (
   id            uuid primary key default gen_random_uuid(),
-  sport         text not null check (sport in ('nba', 'mlb', 'nhl')),
+  sport         text not null,
   external_id   text not null,
   matchup_url   text,
   status        text not null check (status in ('pregame', 'live', 'final')),
@@ -20,13 +20,27 @@ create table if not exists public.games (
   away_public_pct numeric,
   home_public_pct numeric,
   starts_at_text text,
+  game_date     date,
   inserted_at   timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (sport, external_id)
 );
 
+-- Add game_date if upgrading from earlier schema.
+alter table public.games
+  add column if not exists game_date date;
+
+-- Expand the sport check to cover NFL/NCAAF/NCAAB. We drop and recreate
+-- because Postgres doesn't allow editing a check constraint in place.
+alter table public.games
+  drop constraint if exists games_sport_check;
+alter table public.games
+  add constraint games_sport_check
+  check (sport in ('nba', 'mlb', 'nhl', 'nfl', 'ncaaf', 'ncaab'));
+
 create index if not exists games_status_idx on public.games (status);
 create index if not exists games_sport_status_idx on public.games (sport, status);
+create index if not exists games_date_idx on public.games (game_date);
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- fade_flags: every time a game crosses the public-% threshold, we record a flag.

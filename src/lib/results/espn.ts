@@ -1,4 +1,4 @@
-import type { SportKey } from "@/lib/scrapers/covers";
+import type { SportKey } from "@/lib/sports";
 
 export type EspnFinal = {
   awayTeam: string;
@@ -11,6 +11,9 @@ const ESPN_PATH: Record<SportKey, string> = {
   nba: "basketball/nba",
   mlb: "baseball/mlb",
   nhl: "hockey/nhl",
+  nfl: "football/nfl",
+  ncaaf: "football/college-football",
+  ncaab: "basketball/mens-college-basketball",
 };
 
 type Competitor = {

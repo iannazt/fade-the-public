@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ScrapedGame } from "./covers";
-
-export type PersistSummary = {
-  gamesUpserted: number;
-  flagsInserted: number;
-};
+import { evaluateFade } from "@/lib/fade-rules";
 
 /**
  * Upsert games on (sport, external_id). Returns a map of external_id → row uuid
@@ -28,6 +24,7 @@ export async function upsertGames(
     away_public_pct: g.awayPublicPct,
     home_public_pct: g.homePublicPct,
     starts_at_text: g.startsAtText,
+    game_date: g.gameDate,
     updated_at: new Date().toISOString(),
   }));
 
@@ -46,15 +43,16 @@ export async function upsertGames(
 }
 
 /**
- * Insert a fade_flag for each pregame game whose public-side % crosses the
- * threshold. Idempotent — the unique constraint on
- * (game_id, fade_side, threshold_at_flag) prevents duplicate flags when the
- * scraper runs multiple times.
+ * Record fade flags for any game that qualifies under the current rules
+ * (game-day-only, threshold met, moneyline-favorite floor). Idempotent —
+ * the unique constraint on (game_id, fade_side, threshold_at_flag) prevents
+ * duplicates across multiple scrapes.
  */
 export async function recordFadeFlags(
   supabase: SupabaseClient,
   games: ScrapedGame[],
   thresholdPct: number,
+  today: string,
   gameIdMap: Map<string, string>
 ): Promise<number> {
   type FlagRow = {
@@ -68,34 +66,22 @@ export async function recordFadeFlags(
 
   const flags: FlagRow[] = [];
   for (const g of games) {
-    if (g.status !== "pregame") continue;
+    const flag = evaluateFade(g, thresholdPct, today);
+    if (!flag) continue;
     const gameId = gameIdMap.get(`${g.sport}:${g.externalId}`);
     if (!gameId) continue;
-
-    if (g.awayPublicPct != null && g.awayPublicPct >= thresholdPct) {
-      flags.push({
-        game_id: gameId,
-        fade_side: "home",
-        fade_team: g.homeTeam,
-        fade_line: g.homeLine,
-        public_pct: g.awayPublicPct,
-        threshold_at_flag: thresholdPct,
-      });
-    } else if (g.homePublicPct != null && g.homePublicPct >= thresholdPct) {
-      flags.push({
-        game_id: gameId,
-        fade_side: "away",
-        fade_team: g.awayTeam,
-        fade_line: g.awayLine,
-        public_pct: g.homePublicPct,
-        threshold_at_flag: thresholdPct,
-      });
-    }
+    flags.push({
+      game_id: gameId,
+      fade_side: flag.fadeSide,
+      fade_team: flag.fadeTeam,
+      fade_line: flag.fadeLine,
+      public_pct: flag.publicPct,
+      threshold_at_flag: thresholdPct,
+    });
   }
 
   if (flags.length === 0) return 0;
 
-  // ignoreDuplicates: true so we don't error on re-runs of the same scrape.
   const { data, error } = await supabase
     .from("fade_flags")
     .upsert(flags, {

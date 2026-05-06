@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
+import { COVERS_PATH, type SportKey } from "@/lib/sports";
 
-export type SportKey = "nba" | "mlb" | "nhl";
+export type { SportKey };
 
 export type GameStatus = "pregame" | "live" | "final";
 
@@ -16,15 +17,11 @@ export type ScrapedGame = {
   awayPublicPct: number | null;
   homePublicPct: number | null;
   startsAtText: string | null;
+  /** YYYY-MM-DD parsed from the gamebox time text; null if we couldn't infer. */
+  gameDate: string | null;
 };
 
 const COVERS_BASE = "https://www.covers.com";
-
-const SPORT_PATHS: Record<SportKey, string> = {
-  nba: "/sports/nba/matchups",
-  mlb: "/sports/mlb/matchups",
-  nhl: "/sports/nhl/matchups",
-};
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -37,7 +34,6 @@ function parsePct(text: string): number | null {
 }
 
 function parseLine(text: string): number | null {
-  // Strip the percentage so we don't accidentally parse it as the line.
   const withoutPct = text.replace(/\d{1,3}\s*%/g, " ");
   const cleaned = withoutPct.replace(/½/g, ".5").replace(/[−–—]/g, "-");
   if (/\bPK\b/i.test(cleaned)) return 0;
@@ -54,7 +50,6 @@ function classifyStatus(classAttr: string): GameStatus {
 }
 
 function splitHeaderTeams(header: string): { away: string; home: string } {
-  // Format: "Toronto @ Cleveland Conf. QF" — strip trailing round/series tags.
   const cleaned = header
     .replace(
       /\s+(?:Conf\.|Conference|Series|Round|Game|Interleague|World Series|Wild Card|Divisional|Playoffs?|Finals?)(?:\s.*)?$/i,
@@ -68,11 +63,71 @@ function splitHeaderTeams(header: string): { away: string; home: string } {
   return { away: "", home: "" };
 }
 
+const MONTHS: Record<string, number> = {
+  jan: 0, january: 0,
+  feb: 1, february: 1,
+  mar: 2, march: 2,
+  apr: 3, april: 3,
+  may: 4,
+  jun: 5, june: 5,
+  jul: 6, july: 6,
+  aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11,
+};
+
+/**
+ * Parse a date out of Covers' gamebox time text.
+ * Examples we handle:
+ *   "Sunday, May 3 Sun, May 3 7:30 PM ET"  -> "2026-05-03"
+ *   "Sun, May 3 7:30 PM ET"                -> "2026-05-03"
+ *   "35 Live • 2nd 06:16 38" (no date)     -> today (assume the game runs today)
+ *   "101 Final 111" (no date)              -> today (Covers shows today's finals)
+ *
+ * `now` defaults to the current time. Year is inferred — if the parsed
+ * month/day is more than 6 months in the past, we roll to next year, which
+ * handles December scrapes that show January games.
+ */
+export function parseGameDate(
+  startsAtText: string | null,
+  status: GameStatus,
+  now: Date = new Date()
+): string | null {
+  if (!startsAtText) return ymd(now);
+  const m = startsAtText.match(
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december)\b\.?\s+(\d{1,2})/i
+  );
+  if (!m) {
+    // No date in the text — fall back to today for live/final games (Covers
+    // is showing today's slate). Pregame without a date is uncommon but
+    // also reasonable to assume today.
+    void status;
+    return ymd(now);
+  }
+  const month = MONTHS[m[1].toLowerCase()];
+  const day = Number(m[2]);
+  let year = now.getFullYear();
+  const candidate = new Date(year, month, day);
+  // If the parsed date is more than 6 months in the past, roll forward.
+  const monthsPast = (now.getTime() - candidate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  if (monthsPast > 6) year += 1;
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export async function scrapeCoversMatchups(
   sport: SportKey,
   fetchImpl: typeof fetch = fetch
 ): Promise<ScrapedGame[]> {
-  const url = `${COVERS_BASE}${SPORT_PATHS[sport]}`;
+  const url = `${COVERS_BASE}${COVERS_PATH[sport]}`;
   const res = await fetchImpl(url, {
     headers: {
       "User-Agent": UA,
@@ -91,7 +146,8 @@ export async function scrapeCoversMatchups(
 
 export function parseCoversMatchups(
   sport: SportKey,
-  html: string
+  html: string,
+  now: Date = new Date()
 ): ScrapedGame[] {
   const $ = cheerio.load(html);
   const games: ScrapedGame[] = [];
@@ -121,6 +177,7 @@ export function parseCoversMatchups(
     const startsAtText =
       $box.find(".gamebox-time").first().text().trim().replace(/\s+/g, " ") ||
       null;
+    const gameDate = parseGameDate(startsAtText, status, now);
 
     const consensusTexts = $box
       .find(".team-consensus")
@@ -140,6 +197,7 @@ export function parseCoversMatchups(
       awayPublicPct: awayConsensus ? parsePct(awayConsensus) : null,
       homePublicPct: homeConsensus ? parsePct(homeConsensus) : null,
       startsAtText,
+      gameDate,
     });
   });
 
@@ -152,31 +210,3 @@ export type FadeFlag = ScrapedGame & {
   fadeLine: number | null;
   fadeTeam: string;
 };
-
-export function flagFades(
-  games: ScrapedGame[],
-  thresholdPct: number
-): FadeFlag[] {
-  const flagged: FadeFlag[] = [];
-  for (const g of games) {
-    if (g.status !== "pregame") continue;
-    if (g.awayPublicPct != null && g.awayPublicPct >= thresholdPct) {
-      flagged.push({
-        ...g,
-        fadeSide: "home",
-        publicPct: g.awayPublicPct,
-        fadeLine: g.homeLine,
-        fadeTeam: g.homeTeam,
-      });
-    } else if (g.homePublicPct != null && g.homePublicPct >= thresholdPct) {
-      flagged.push({
-        ...g,
-        fadeSide: "away",
-        publicPct: g.homePublicPct,
-        fadeLine: g.awayLine,
-        fadeTeam: g.awayTeam,
-      });
-    }
-  }
-  return flagged;
-}
