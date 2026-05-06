@@ -84,8 +84,17 @@ export default function GameCard({
     </div>
   );
 
+  const isFadeCard = fadePick != null;
+
   return (
-    <article className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+    <article
+      className={[
+        "rounded-lg border bg-zinc-900 p-4",
+        isFadeCard
+          ? "border-emerald-400/50 ring-1 ring-emerald-400/40"
+          : "border-zinc-800",
+      ].join(" ")}
+    >
       <div className="mb-3 flex items-center justify-between text-xs text-zinc-500">
         <span className="rounded bg-zinc-800 px-2 py-0.5 font-semibold uppercase tracking-wider text-zinc-300">
           {sportLabel(sport)}

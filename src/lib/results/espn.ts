@@ -28,12 +28,19 @@ type Competitor = {
   };
 };
 
+type OddsBlock = {
+  spread?: number | string;
+  homeTeamOdds?: { moneyLine?: number | string };
+  awayTeamOdds?: { moneyLine?: number | string };
+};
+
 type Event = {
   id: string;
   date: string;
   competitions: Array<{
     status: { type: { completed: boolean; state?: string } };
     competitors: Competitor[];
+    odds?: OddsBlock[];
   }>;
 };
 
@@ -79,7 +86,18 @@ export type EspnScheduled = {
   startsAtText: string;
   awayTeam: string;
   homeTeam: string;
+  /** Home spread per ESPN (negative = home favored). Null if not posted. */
+  spread: number | null;
+  /** American moneyline odds per side. Null if not posted. */
+  homeMoneyLine: number | null;
+  awayMoneyLine: number | null;
 };
+
+function coerceNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 const TIME_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -125,12 +143,16 @@ export async function fetchEspnScheduled(
     } catch {
       // Keep raw ISO if formatter chokes.
     }
+    const odds = comp.odds?.[0];
     out.push({
       externalId: event.id,
       startsAtIso: event.date,
       startsAtText,
       awayTeam,
       homeTeam,
+      spread: coerceNum(odds?.spread),
+      homeMoneyLine: coerceNum(odds?.homeTeamOdds?.moneyLine),
+      awayMoneyLine: coerceNum(odds?.awayTeamOdds?.moneyLine),
     });
   }
   return out;

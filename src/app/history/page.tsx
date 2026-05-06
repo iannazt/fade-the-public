@@ -256,6 +256,14 @@ export default async function HistoryPage({
                 const matchup = flag.games
                   ? `${flag.games.away_team} @ ${flag.games.home_team}`
                   : "—";
+                const publicTeam =
+                  flag.fade_side === "home"
+                    ? flag.games?.away_team ?? null
+                    : flag.games?.home_team ?? null;
+                const fadeLabel =
+                  flag.fade_line == null
+                    ? flag.fade_team
+                    : `${flag.fade_team} ${formatLine(flag.fade_line)}`;
                 const units =
                   outcome == null
                     ? null
@@ -289,10 +297,15 @@ export default async function HistoryPage({
                     </td>
                     <td className="px-3 py-2">{matchup}</td>
                     <td className="px-3 py-2 font-medium text-emerald-300">
-                      {flag.fade_team}
+                      {fadeLabel}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-zinc-300">
                       {formatNumber(flag.public_pct, 0)}%
+                      {publicTeam && (
+                        <span className="ml-1 text-zinc-500">
+                          on {publicTeam}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-zinc-300">
                       {formatLine(flag.fade_line)}

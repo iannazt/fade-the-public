@@ -69,8 +69,8 @@ export default function HowItWorksPage() {
           for <span className="font-mono">NFL</span>,{" "}
           <span className="font-mono">NBA</span>,{" "}
           <span className="font-mono">NCAAF</span>, and{" "}
-          <span className="font-mono">NCAAB</span> we track public % on the
-          spread. That&rsquo;s where the public concentrates action and
+          <span className="font-mono">NCAAB</span>
+          {" "}we track public % on the spread. That&rsquo;s where the public concentrates action and
           where the line-shading dynamic operates.
         </p>
         <p>
@@ -96,8 +96,8 @@ export default function HowItWorksPage() {
         </p>
         <p>
           Second, that favorite has to be priced at{" "}
-          <span className="font-mono">-175</span> or shorter (i.e., closer to
-          even). Once a favorite is longer than -175 &mdash; -200, -300,
+          <span className="font-mono">-175</span>
+          {" "}or shorter (i.e., closer to even). Once a favorite is longer than -175 &mdash; -200, -300,
           whatever &mdash; its implied win probability is high enough that the
           public is probably right and the dog is genuinely a bad price. Fading
           a -300 favorite means betting an underdog that should win ~25% of

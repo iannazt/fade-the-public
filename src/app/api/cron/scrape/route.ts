@@ -6,7 +6,7 @@ import {
 } from "@/lib/scrapers/covers";
 import { upsertGames, recordFadeFlags } from "@/lib/scrapers/persist";
 import { todayInEastern } from "@/lib/fade-rules";
-import { SPORTS, type SportKey } from "@/lib/sports";
+import { BET_TYPE, SPORTS, type SportKey } from "@/lib/sports";
 import { fetchEspnScheduled } from "@/lib/results/espn";
 
 // 65% is the floor. Higher thresholds let the History page filter to
@@ -89,20 +89,33 @@ export async function GET(req: Request) {
           toYyyymmdd(isoDate)
         );
         if (scheduled.length === 0) continue;
-        const rows: ScrapedGame[] = scheduled.map((s) => ({
-          sport: sport as SportKey,
-          externalId: `espn:${s.externalId}`,
-          matchupUrl: "",
-          status: "pregame",
-          awayTeam: s.awayTeam,
-          homeTeam: s.homeTeam,
-          awayLine: null,
-          homeLine: null,
-          awayPublicPct: null,
-          homePublicPct: null,
-          startsAtText: s.startsAtText,
-          gameDate: isoDate,
-        }));
+        const betType = BET_TYPE[sport as SportKey];
+        const rows: ScrapedGame[] = scheduled.map((s) => {
+          let awayLine: number | null = null;
+          let homeLine: number | null = null;
+          if (betType === "spread" && s.spread != null) {
+            // ESPN's `spread` is the home spread. Away is the inverse.
+            homeLine = s.spread;
+            awayLine = -s.spread;
+          } else if (betType === "moneyline") {
+            awayLine = s.awayMoneyLine;
+            homeLine = s.homeMoneyLine;
+          }
+          return {
+            sport: sport as SportKey,
+            externalId: `espn:${s.externalId}`,
+            matchupUrl: "",
+            status: "pregame",
+            awayTeam: s.awayTeam,
+            homeTeam: s.homeTeam,
+            awayLine,
+            homeLine,
+            awayPublicPct: null,
+            homePublicPct: null,
+            startsAtText: s.startsAtText,
+            gameDate: isoDate,
+          };
+        });
         await upsertGames(supabase, rows);
         perSport[sport].espn += rows.length;
       } catch (err) {
