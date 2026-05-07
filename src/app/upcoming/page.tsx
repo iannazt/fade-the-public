@@ -117,8 +117,9 @@ export default async function UpcomingPage({
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Upcoming</h1>
         <p className="mt-2 text-zinc-400">
-          Today plus the next two days. Fade signals show only on game day —
-          public % shifts too much in advance for early signals to be reliable.
+          Today plus the next two days. Future days show public % as info,
+          but fade signals only fire on game day — public % shifts too much
+          in advance for early signals to be reliable.
         </p>
       </div>
 

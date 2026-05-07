@@ -28,27 +28,12 @@ type Competitor = {
   };
 };
 
-type MoneylineSide = {
-  close?: { odds?: number | string };
-  open?: { odds?: number | string };
-};
-
-type OddsBlock = {
-  spread?: number | string;
-  // ESPN sometimes exposes per-side moneylines at the top of the team odds,
-  // sometimes only inside the `moneyline` block. Read both.
-  homeTeamOdds?: { moneyLine?: number | string };
-  awayTeamOdds?: { moneyLine?: number | string };
-  moneyline?: { home?: MoneylineSide; away?: MoneylineSide };
-};
-
 type Event = {
   id: string;
   date: string;
   competitions: Array<{
     status: { type: { completed: boolean; state?: string } };
     competitors: Competitor[];
-    odds?: OddsBlock[];
   }>;
 };
 
@@ -86,92 +71,6 @@ export async function fetchEspnFinals(
     });
   }
   return finals;
-}
-
-export type EspnScheduled = {
-  externalId: string;
-  startsAtIso: string;
-  startsAtText: string;
-  awayTeam: string;
-  homeTeam: string;
-  /** Home spread per ESPN (negative = home favored). Null if not posted. */
-  spread: number | null;
-  /** American moneyline odds per side. Null if not posted. */
-  homeMoneyLine: number | null;
-  awayMoneyLine: number | null;
-};
-
-function coerceNum(v: unknown): number | null {
-  if (v == null) return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-const TIME_FMT = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/New_York",
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZoneName: "short",
-});
-
-/**
- * Fetch ESPN's scoreboard for `yyyymmdd` and return only games still
- * scheduled (state="pre"). Used for tomorrow / day-after on the
- * Upcoming page since Covers only serves today's matchups.
- */
-export async function fetchEspnScheduled(
-  sport: SportKey,
-  yyyymmdd: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<EspnScheduled[]> {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_PATH[sport]}/scoreboard?dates=${yyyymmdd}`;
-  const res = await fetchImpl(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`ESPN ${sport} ${yyyymmdd}: HTTP ${res.status}`);
-  }
-  const data = (await res.json()) as { events?: Event[] };
-  const out: EspnScheduled[] = [];
-  for (const event of data.events ?? []) {
-    const comp = event.competitions?.[0];
-    if (!comp) continue;
-    if (comp.status?.type?.state !== "pre") continue;
-    const away = comp.competitors.find((c) => c.homeAway === "away");
-    const home = comp.competitors.find((c) => c.homeAway === "home");
-    if (!away || !home) continue;
-    const awayTeam = away.team.location ?? away.team.displayName;
-    const homeTeam = home.team.location ?? home.team.displayName;
-    if (!awayTeam || !homeTeam) continue;
-    let startsAtText = event.date;
-    try {
-      startsAtText = TIME_FMT.format(new Date(event.date));
-    } catch {
-      // Keep raw ISO if formatter chokes.
-    }
-    const odds = comp.odds?.[0];
-    const homeML =
-      coerceNum(odds?.homeTeamOdds?.moneyLine) ??
-      coerceNum(odds?.moneyline?.home?.close?.odds) ??
-      coerceNum(odds?.moneyline?.home?.open?.odds);
-    const awayML =
-      coerceNum(odds?.awayTeamOdds?.moneyLine) ??
-      coerceNum(odds?.moneyline?.away?.close?.odds) ??
-      coerceNum(odds?.moneyline?.away?.open?.odds);
-    out.push({
-      externalId: event.id,
-      startsAtIso: event.date,
-      startsAtText,
-      awayTeam,
-      homeTeam,
-      spread: coerceNum(odds?.spread),
-      homeMoneyLine: homeML,
-      awayMoneyLine: awayML,
-    });
-  }
-  return out;
 }
 
 /**

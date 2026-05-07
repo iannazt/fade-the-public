@@ -123,11 +123,22 @@ function ymd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Scrape Covers' matchup page for a given sport.
+ *
+ * Pass `selectedDate` (YYYY-MM-DD) to fetch a future day. Covers serves
+ * tomorrow / day-after slates via the `?selectedDate=` query param, and
+ * publishes consensus % + lines as soon as books post them. When data
+ * isn't out yet the gamebox renders "-" placeholders, which our parser
+ * naturally returns as null.
+ */
 export async function scrapeCoversMatchups(
   sport: SportKey,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  selectedDate?: string
 ): Promise<ScrapedGame[]> {
-  const url = `${COVERS_BASE}${COVERS_PATH[sport]}`;
+  const qs = selectedDate ? `?selectedDate=${selectedDate}` : "";
+  const url = `${COVERS_BASE}${COVERS_PATH[sport]}${qs}`;
   const res = await fetchImpl(url, {
     headers: {
       "User-Agent": UA,
